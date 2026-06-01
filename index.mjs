@@ -6,11 +6,17 @@
 // INSERT INTO seats (isbooked)
 // SELECT 0 FROM generate_series(1, 20);
 
+
+
+
 import express from "express";
 import pg from "pg";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
+import 'dotenv/config';
+import authRoutes from './src/modules/auth/auth.routes.js';
+import userAuthenticated from './src/modules/auth/auth.middleware.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,31 +27,50 @@ const port = process.env.PORT || 8080;
 // If you pick one connection out of the pool and release it
 // the pooler will keep that connection open for sometime to other clients to reuse
 const pool = new pg.Pool({
-  host: "localhost",
-  port: 5433,
-  user: "postgres",
-  password: "postgres",
-  database: "sql_class_2_db",
-  max: 20,
-  connectionTimeoutMillis: 0,
-  idleTimeoutMillis: 0,
+  // host: process.env.PGHOST,
+  // port: process.env.PGPORT || 5433,
+  // user: process.env.PGUSER,
+  // password: process.env.PGPASSWORD,
+  // database: process.env.PGDATABASE,
+  // max: 20,
+  // connectionTimeoutMillis: 0,
+  // idleTimeoutMillis: 0,
+  connectionString: process.env.DB_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
 const app = new express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: false
+}));
+app.use(express.json());
+
+app.use('/auth', authRoutes);
 
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
 });
 //get all seats
-app.get("/seats", async (req, res) => {
+app.get("/seats", userAuthenticated, async (req, res) => {
   const result = await pool.query("select * from seats"); // equivalent to Seats.find() in mongoose
   res.send(result.rows);
 });
-
 //book a seat give the seatId and your name
 
-app.put("/:id/:name", async (req, res) => {
+app.get("/health", async (req, res) => {
+    try {
+        await pool.query("SELECT 1");
+        res.status(200).json({ status: "ok" });
+    } catch (err) {
+        res.status(500).json({ status: "db down", err });
+    }
+});
+
+app.put("/:id/:name", userAuthenticated, async (req, res) => {
   try {
     const id = req.params.id;
     const name = req.params.name;
@@ -83,4 +108,15 @@ app.put("/:id/:name", async (req, res) => {
   }
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    message: err.message || "Internal Server Error"
+  });
+});
+
 app.listen(port, () => console.log("Server starting on port: " + port));
+
+export default pool;
