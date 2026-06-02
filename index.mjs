@@ -10,36 +10,17 @@
 
 
 import express from "express";
-import pg from "pg";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import 'dotenv/config';
 import authRoutes from './src/modules/auth/auth.routes.js';
 import userAuthenticated from './src/modules/auth/auth.middleware.js';
+import pool from './src/common/db/pool.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const port = process.env.PORT || 8080;
-
-// Equivalent to mongoose connection
-// Pool is nothing but group of connections
-// If you pick one connection out of the pool and release it
-// the pooler will keep that connection open for sometime to other clients to reuse
-const pool = new pg.Pool({
-  // host: process.env.PGHOST,
-  // port: process.env.PGPORT || 5433,
-  // user: process.env.PGUSER,
-  // password: process.env.PGPASSWORD,
-  // database: process.env.PGDATABASE,
-  // max: 20,
-  // connectionTimeoutMillis: 0,
-  // idleTimeoutMillis: 0,
-  connectionString: process.env.DB_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
 
 const app = new express();
 app.use(cors({
@@ -70,7 +51,7 @@ app.get("/health", async (req, res) => {
     }
 });
 
-app.put("/:id/:name", userAuthenticated, async (req, res) => {
+app.put("/:id/:name", userAuthenticated, async (req, res, next) => {
   try {
     const id = req.params.id;
     const name = req.params.name;
@@ -91,8 +72,11 @@ app.put("/:id/:name", userAuthenticated, async (req, res) => {
     //if no rows found then the operation should fail can't book
     // This shows we Do not have the current seat available for booking
     if (result.rowCount === 0) {
-      res.send({ error: "Seat already booked" });
-      return;
+      await conn.query("ROLLBACK");
+      conn.release();
+      const error = new Error("Seat is already booked");
+      error.statusCode = 400;
+      return next(error);
     }
     //if we get the row, we are safe to update
     const sqlU = "update seats set isbooked = 1, name = $2 where id = $1";
@@ -101,10 +85,16 @@ app.put("/:id/:name", userAuthenticated, async (req, res) => {
     //end transaction by committing
     await conn.query("COMMIT");
     conn.release(); // release the connection back to the pool (so we do not keep the connection open unnecessarily)
-    res.send(updateResult);
+    res.status(200).json({
+      success: true,
+      message: "Seat booked successfully",
+      data: { seatId: id, name: name }
+    });
   } catch (ex) {
     console.log(ex);
-    res.send(500);
+    const error = new Error(ex.message || "Failed to book seat");
+    error.statusCode = 500;
+    next(error);
   }
 });
 

@@ -266,14 +266,14 @@
                             const userNameForBooking = localStorage.getItem('userName');
 
                             try {
-                                const res = await fetch(`${API_URL}/${seatId}/${userNameForBooking}`, { method: 'PUT' });
+                                const res = await fetch(`${API_URL}/${seatId}/${userNameForBooking}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
                                 const data = await res.json();
 
-                                if (data.error) {
-                                    alert('Seat already booked!');
-                                } else {
+                                if (data.success) {
                                     alert('Seat booked successfully!');
                                     loadSeats();
+                                } else {
+                                    alert('Error: ' + data.message);
                                 }
                             } catch (err) {
                                 alert('Booking failed: ' + err.message);

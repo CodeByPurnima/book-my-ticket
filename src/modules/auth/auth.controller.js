@@ -1,6 +1,6 @@
 import ApiError from "../../common/utils/api-error.js";
 import ApiResponse from "../../common/utils/api-response.js";
-import pool from '../../../index.mjs';
+import pool from '../../common/db/pool.js';
 import bcrypt from "bcrypt";
 import { generateToken } from "../../common/utils/token.js";
 
