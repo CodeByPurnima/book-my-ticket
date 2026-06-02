@@ -109,4 +109,4 @@ app.use((err, req, res, next) => {
 
 app.listen(port, () => console.log("Server starting on port: " + port));
 
-export default pool;
+
